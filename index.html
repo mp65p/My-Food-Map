@@ -1,0 +1,877 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>食光地圖 · 美食搜尋與收藏</title>
+<style>
+  :root{
+    --bg:#FBF7F0; --panel:#FFFFFF; --ink:#2A2622; --sub:#7C746B;
+    --line:#EBE3D8; --accent:#E2603B; --accent-d:#C24A28;
+    --gold:#E0A21C; --green:#3F8A5C; --pin:#5B6B7C;
+    --shadow:0 2px 10px rgba(42,38,34,.06);
+    --radius:14px;
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  html,body{margin:0;height:100%}
+  body{
+    font-family:"Noto Sans TC","PingFang TC","Microsoft JhengHei",system-ui,sans-serif;
+    background:var(--bg); color:var(--ink); font-size:15px; line-height:1.5;
+  }
+  button{font-family:inherit;cursor:pointer}
+  input,select{font-family:inherit;font-size:15px}
+
+  /* ---------- Login ---------- */
+  #login{
+    position:fixed;inset:0;z-index:50;display:flex;align-items:center;justify-content:center;
+    background:linear-gradient(160deg,#FBF7F0,#F3E9DB);padding:24px;
+  }
+  .login-card{
+    background:var(--panel);border:1px solid var(--line);border-radius:20px;
+    box-shadow:var(--shadow);padding:34px 28px;width:100%;max-width:360px;text-align:center;
+  }
+  .login-card .logo{font-size:38px;line-height:1}
+  .login-card h1{font-size:21px;margin:14px 0 4px;letter-spacing:.5px}
+  .login-card p{color:var(--sub);font-size:13px;margin:0 0 22px}
+  .login-card input{
+    width:100%;padding:13px 14px;border:1px solid var(--line);border-radius:12px;
+    background:#FCFAF6;text-align:center;letter-spacing:3px;outline:none;
+  }
+  .login-card input:focus{border-color:var(--accent)}
+  .login-card button{
+    width:100%;margin-top:14px;padding:13px;border:none;border-radius:12px;
+    background:var(--accent);color:#fff;font-size:16px;font-weight:600;
+  }
+  .login-card button:active{background:var(--accent-d)}
+  .login-err{color:var(--accent-d);font-size:13px;min-height:18px;margin-top:10px}
+
+  /* ---------- App shell ---------- */
+  #app{display:none;flex-direction:column;height:100%}
+  header.top{
+    display:flex;align-items:center;gap:10px;padding:11px 16px;
+    background:var(--panel);border-bottom:1px solid var(--line);position:sticky;top:0;z-index:20;
+  }
+  header.top .brand{font-weight:700;font-size:17px;display:flex;align-items:center;gap:7px}
+  header.top .brand span{font-size:20px}
+  header.top nav{margin-left:auto;display:flex;gap:6px}
+  header.top nav button{
+    border:1px solid var(--line);background:#fff;border-radius:999px;padding:7px 14px;
+    font-size:13.5px;color:var(--sub);
+  }
+  header.top nav button.active{background:var(--accent);border-color:var(--accent);color:#fff}
+
+  main{flex:1;min-height:0;display:flex;flex-direction:column}
+
+  /* ---------- Filters ---------- */
+  .filters{
+    background:var(--panel);border-bottom:1px solid var(--line);padding:14px 16px;
+  }
+  .filters .grp{margin-bottom:12px}
+  .filters .grp:last-child{margin-bottom:0}
+  .lbl{font-size:12px;color:var(--sub);font-weight:600;margin-bottom:6px;display:block;letter-spacing:.4px}
+  .row{display:flex;flex-wrap:wrap;gap:8px}
+  .seg{display:flex;gap:6px;flex-wrap:wrap}
+  .chip{
+    border:1px solid var(--line);background:#FCFAF6;border-radius:999px;
+    padding:7px 13px;font-size:13.5px;color:var(--ink);user-select:none;transition:.12s;
+  }
+  .chip.on{background:var(--accent);border-color:var(--accent);color:#fff}
+  .field{
+    flex:1;min-width:150px;padding:10px 12px;border:1px solid var(--line);
+    border-radius:10px;background:#FCFAF6;outline:none;
+  }
+  .field:focus{border-color:var(--accent)}
+  select.field{appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%237C746B'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 12px center;padding-right:30px}
+  .adv-toggle{
+    background:none;border:none;color:var(--accent-d);font-size:13px;font-weight:600;padding:2px 0;
+  }
+  .adv{display:none}
+  .adv.show{display:block}
+  .btn-row{display:flex;gap:8px;margin-top:10px}
+  .search-btn{
+    flex:1;padding:13px;border:none;border-radius:12px;
+    background:var(--accent);color:#fff;font-size:16px;font-weight:600;
+  }
+  .search-btn:active{background:var(--accent-d)}
+  .search-btn:disabled{opacity:.6}
+  .near-btn{
+    flex:0 0 auto;padding:13px 16px;border:1px solid var(--accent);border-radius:12px;
+    background:#fff;color:var(--accent-d);font-size:15px;font-weight:600;white-space:nowrap;
+  }
+  .near-btn:active{background:#FFF3E8}
+  .near-btn:disabled{opacity:.6}
+
+  /* ---------- Content split ---------- */
+  .split{flex:1;min-height:0;display:flex}
+  .listcol{
+    width:42%;max-width:520px;min-width:300px;overflow-y:auto;
+    background:var(--bg);border-right:1px solid var(--line);
+  }
+  .mapcol{flex:1;position:relative;min-height:240px}
+  #map{position:absolute;inset:0}
+  .map-warn{
+    position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
+    text-align:center;color:var(--sub);font-size:13px;padding:24px;background:#F1ECE3;
+  }
+
+  .status{padding:14px 16px;color:var(--sub);font-size:13.5px}
+  .card{
+    background:var(--panel);margin:10px 12px;border:1px solid var(--line);border-radius:var(--radius);
+    box-shadow:var(--shadow);overflow:hidden;
+  }
+  .card .head{display:flex;gap:12px;padding:13px 14px;cursor:pointer;align-items:flex-start}
+  .card .nm{font-weight:600;font-size:15.5px;flex:1}
+  .meta{display:flex;flex-wrap:wrap;gap:8px;margin-top:5px;font-size:13px;color:var(--sub)}
+  .rate{color:var(--gold);font-weight:600}
+  .open{color:var(--green);font-weight:600}
+  .closed{color:var(--accent-d);font-weight:600}
+  .price{color:var(--ink);font-weight:600}
+  .fav-row{display:flex;gap:6px;padding:0 14px 13px}
+  .fav-row button{
+    flex:1;border:1px solid var(--line);background:#FCFAF6;border-radius:9px;
+    padding:8px 4px;font-size:12.5px;color:var(--sub);
+  }
+  .fav-row button.set-want{background:#FFF3E8;border-color:#F4C99F;color:var(--accent-d)}
+  .fav-row button.set-been{background:#EAF5EE;border-color:#A9D4BC;color:var(--green)}
+  .fav-row button.set-pocket{background:#EEF1F5;border-color:#B7C3D0;color:var(--pin)}
+
+  .detail{border-top:1px solid var(--line);padding:14px;display:none;background:#FCFAF6}
+  .detail.show{display:block}
+  .detail .drow{margin:7px 0;font-size:13.5px;display:flex;gap:8px}
+  .detail .drow b{color:var(--sub);font-weight:600;min-width:46px}
+  .detail a{color:var(--accent-d);text-decoration:none;word-break:break-all}
+  .detail .acts{display:flex;gap:8px;margin-top:12px}
+  .detail .acts a{
+    flex:1;text-align:center;background:var(--accent);color:#fff;border-radius:9px;
+    padding:10px;font-weight:600;font-size:13.5px;
+  }
+  .detail .acts a.alt{background:#fff;color:var(--accent-d);border:1px solid var(--accent)}
+
+  /* ---------- Favorites view ---------- */
+  .fav-view{display:none;flex:1;overflow-y:auto;background:var(--bg)}
+  .fav-view.show{display:block}
+  .fav-filter{display:flex;gap:6px;padding:14px 16px 4px;flex-wrap:wrap}
+  .empty{text-align:center;color:var(--sub);padding:60px 24px;font-size:14px}
+
+  .pill{display:inline-block;font-size:11.5px;padding:2px 9px;border-radius:999px;font-weight:600}
+  .pill.want{background:#FFF3E8;color:var(--accent-d)}
+  .pill.been{background:#EAF5EE;color:var(--green)}
+  .pill.pocket{background:#EEF1F5;color:var(--pin)}
+
+  .toast{
+    position:fixed;left:50%;bottom:28px;transform:translateX(-50%) translateY(20px);
+    background:var(--ink);color:#fff;padding:11px 18px;border-radius:999px;font-size:13.5px;
+    opacity:0;transition:.22s;z-index:60;pointer-events:none;
+  }
+  .toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+
+  @media (max-width:820px){
+    .split{flex-direction:column-reverse}
+    .listcol{width:100%;max-width:none;min-width:0;border-right:none;border-top:1px solid var(--line);flex:1}
+    .mapcol{height:260px;flex:none}
+    header.top nav button{padding:7px 11px}
+  }
+</style>
+</head>
+<body>
+
+<!-- ============ LOGIN ============ -->
+<div id="login">
+  <div class="login-card">
+    <div class="logo">🍜</div>
+    <h1>食光地圖</h1>
+    <p>美食搜尋與收藏系統</p>
+    <input id="pw" type="password" placeholder="輸入密碼" autocomplete="off" inputmode="text">
+    <button id="loginBtn">進入系統</button>
+    <div class="login-err" id="loginErr"></div>
+  </div>
+</div>
+
+<!-- ============ APP ============ -->
+<div id="app">
+  <header class="top">
+    <div class="brand"><span>🍜</span>食光地圖</div>
+    <nav>
+      <button id="navSearch" class="active">搜尋</button>
+      <button id="navFav">我的收藏</button>
+      <button id="navLogout" style="color:var(--accent-d)">登出</button>
+    </nav>
+  </header>
+
+  <main>
+    <!-- ---- Filters (search view) ---- -->
+    <section class="filters" id="filters">
+      <div class="grp">
+        <span class="lbl">國家</span>
+        <div class="seg" id="segCountry">
+          <div class="chip on" data-v="TW">台灣</div>
+          <div class="chip" data-v="JP">日本</div>
+          <div class="chip" data-v="OTHER">其他</div>
+        </div>
+      </div>
+
+      <div class="grp">
+        <span class="lbl" id="regionLbl">地區（縣市）</span>
+        <div class="row">
+          <select class="field" id="regionSel"></select>
+          <input class="field" id="regionFree" placeholder="自由輸入地區 / 車站名稱" style="display:none">
+        </div>
+      </div>
+
+      <div class="grp">
+        <span class="lbl">店家類別（Places type）</span>
+        <div class="seg" id="segType">
+          <div class="chip on" data-v="restaurant">餐廳</div>
+          <div class="chip" data-v="cafe">咖啡廳</div>
+          <div class="chip" data-v="bakery">烘焙</div>
+          <div class="chip" data-v="convenience_store">便利商店</div>
+          <div class="chip" data-v="supermarket">超市</div>
+        </div>
+      </div>
+
+      <div class="grp">
+        <span class="lbl">餐廳類別（關鍵字）</span>
+        <div class="seg" id="segKw">
+          <div class="chip" data-v="火鍋">火鍋</div>
+          <div class="chip" data-v="燒肉">燒肉</div>
+          <div class="chip" data-v="拉麵">拉麵</div>
+          <div class="chip" data-v="壽司">壽司</div>
+          <div class="chip" data-v="韓式">韓式</div>
+          <div class="chip" data-v="義式">義式</div>
+          <div class="chip" data-v="早餐">早餐</div>
+          <div class="chip" data-v="小吃">小吃</div>
+          <div class="chip" data-v="甜點">甜點</div>
+        </div>
+      </div>
+
+      <button class="adv-toggle" id="advToggle">進階篩選 ▾</button>
+      <div class="adv" id="advBox">
+        <div class="grp" style="margin-top:10px">
+          <span class="lbl">價位</span>
+          <div class="seg" id="segPrice">
+            <div class="chip" data-v="1">$</div>
+            <div class="chip" data-v="2">$$</div>
+            <div class="chip" data-v="3">$$$</div>
+          </div>
+        </div>
+        <div class="grp">
+          <span class="lbl">評價星級</span>
+          <div class="seg" id="segStar">
+            <div class="chip" data-v="3.5">≥ 3.5</div>
+            <div class="chip" data-v="4">≥ 4.0</div>
+            <div class="chip" data-v="4.5">≥ 4.5</div>
+          </div>
+        </div>
+        <div class="grp">
+          <span class="lbl">其他</span>
+          <div class="seg">
+            <div class="chip" id="chipOpen">營業中</div>
+            <div class="chip" id="chipBuffet">吃到飽</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="btn-row">
+        <button class="search-btn" id="searchBtn">🔍 搜尋美食</button>
+        <button class="near-btn" id="nearBtn">📍 我附近</button>
+      </div>
+    </section>
+
+    <!-- ---- Split: list + map ---- -->
+    <div class="split" id="splitView">
+      <div class="listcol" id="listcol">
+        <div class="status" id="status">設定條件後按「搜尋美食」開始。</div>
+      </div>
+      <div class="mapcol">
+        <div id="map"></div>
+        <div class="map-warn" id="mapWarn">地圖載入中…若長時間空白，請確認已填入 Google API Key。</div>
+      </div>
+    </div>
+
+    <!-- ---- Favorites view ---- -->
+    <div class="fav-view" id="favView">
+      <div class="fav-filter" id="favFilter">
+        <div class="chip on" data-v="all">全部</div>
+        <div class="chip" data-v="want">⭐ 想去</div>
+        <div class="chip" data-v="been">✅ 去過</div>
+        <div class="chip" data-v="pocket">📌 口袋名單</div>
+      </div>
+      <div id="favList"></div>
+    </div>
+  </main>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+/* =====================================================================
+   食光地圖 — 單一檔案美食搜尋與收藏系統
+   - 登入：密碼驗證（localStorage / sessionStorage），非 OAuth
+   - 搜尋：Google Maps JavaScript API（places library，前端呼叫）
+   - 收藏：localStorage，採 Firestore-ready schema（可日後改 Firestore）
+   ===================================================================== */
+
+/* ====== 設定區 ====== */
+const CONFIG = {
+  GOOGLE_API_KEY: "AIzaSyDwDkp_ISyy5YEwmWbtq64YIHNhWNDb9fw",   // ← 你的 Google API Key（請務必在 Cloud Console 設網域限制）
+  ACCESS_PASSWORD: "1234",                  // ← 進入系統的密碼（可自行修改）
+  STORAGE_FAV: "foodmap_favorites_v1",
+  STORAGE_SESSION: "foodmap_auth"
+};
+
+/* ====== 地區資料 ====== */
+const REGIONS = {
+  TW: ["台北市","新北市","桃園市","台中市","台南市","高雄市","基隆市","新竹市","新竹縣",
+       "苗栗縣","彰化縣","南投縣","雲林縣","嘉義市","嘉義縣","屏東縣","宜蘭縣","花蓮縣",
+       "台東縣","澎湖縣","金門縣","連江縣"],
+  JP: ["大阪","京都","神戶","東京","新宿站","澀谷站","新大阪站","京都站","梅田",
+       "難波","名古屋","札幌","福岡","橫濱","鳥取","米子","境港"]
+};
+
+/* =====================================================================
+   SearchEngine：集中管理所有搜尋邏輯（query 組裝 + type/keyword 組合 + 客戶端篩選）
+   ===================================================================== */
+const SearchEngine = {
+  service: null,
+  map: null,
+  ready: false,
+
+  // 由目前篩選狀態組出送往 Google 的查詢字串
+  buildQuery(s){
+    const parts = [];
+    if (s.region) parts.push(s.region);
+    if (s.keyword) parts.push(s.keyword);
+    if (s.buffet) parts.push("吃到飽");
+    if (parts.length === 0) parts.push("美食");
+    return parts.join(" ");
+  },
+
+  // 組出 textSearch 請求（type + keyword 組合）
+  buildRequest(s){
+    const req = {
+      query: this.buildQuery(s),
+      type: s.type || "restaurant"
+    };
+    if (s.openNow) req.openNow = true;
+    if (s.maxPrice) { req.minPrice = 0; req.maxPrice = Number(s.maxPrice); }
+    return req;
+  },
+
+  // Google 回傳後的客戶端二次篩選（星級、價位下限、吃到飽字樣）
+  applyClientFilters(results, s){
+    return results.filter(p=>{
+      if (s.minStar && (p.rating||0) < Number(s.minStar)) return false;
+      if (s.price && p.price_level != null && Number(p.price_level) !== Number(s.price)) return false;
+      if (s.buffet){
+        const t = ((p.name||"") + " " + (p.formatted_address||p.vicinity||"")).toLowerCase();
+        if (!/吃到飽|食べ放題|all you can eat|buffet|バイキング/i.test(t)) {
+          // 允許名稱含相關字；若 Google 已用 query 過濾仍保留
+        }
+      }
+      return true;
+    });
+  },
+
+  // 執行搜尋
+  run(state){
+    return new Promise((resolve, reject)=>{
+      if (!this.ready || !this.service){ reject("MAPS_NOT_READY"); return; }
+      const req = this.buildRequest(state);
+      this.service.textSearch(req, (results, status)=>{
+        const OK = google.maps.places.PlacesServiceStatus.OK;
+        const ZERO = google.maps.places.PlacesServiceStatus.ZERO_RESULTS;
+        if (status === OK && results){
+          resolve(this.applyClientFilters(results, state));
+        } else if (status === ZERO){
+          resolve([]);
+        } else {
+          reject(status);
+        }
+      });
+    });
+  },
+
+  // 附近搜尋（以使用者座標 + 半徑），nearbySearch 支援 type/keyword/openNow/價位
+  runNearby(state, center, radius){
+    return new Promise((resolve, reject)=>{
+      if (!this.ready || !this.service){ reject("MAPS_NOT_READY"); return; }
+      const req = {
+        location: center,
+        radius: radius || 1500,
+        type: state.type || "restaurant"
+      };
+      const kw = [];
+      if (state.keyword) kw.push(state.keyword);
+      if (state.buffet) kw.push("吃到飽");
+      if (kw.length) req.keyword = kw.join(" ");
+      if (state.openNow) req.openNow = true;
+      if (state.maxPrice) { req.minPrice = 0; req.maxPrice = Number(state.maxPrice); }
+      this.service.nearbySearch(req, (results, status)=>{
+        const OK = google.maps.places.PlacesServiceStatus.OK;
+        const ZERO = google.maps.places.PlacesServiceStatus.ZERO_RESULTS;
+        if (status === OK && results) resolve(this.applyClientFilters(results, state));
+        else if (status === ZERO) resolve([]);
+        else reject(status);
+      });
+    });
+  },
+
+  // 取得單店詳細（電話、官網、營業、座標）
+  details(placeId){
+    return new Promise((resolve, reject)=>{
+      this.service.getDetails({
+        placeId,
+        fields:["place_id","name","formatted_address","formatted_phone_number",
+                "website","url","rating","price_level","geometry","opening_hours"]
+      }, (place, status)=>{
+        if (status === google.maps.places.PlacesServiceStatus.OK) resolve(place);
+        else reject(status);
+      });
+    });
+  }
+};
+
+/* =====================================================================
+   FavStore：收藏資料層（localStorage）。Schema 對齊 Firestore 文件結構
+   doc id = placeId → 之後可直接寫入 collection("favorites")
+   ===================================================================== */
+const FavStore = {
+  _read(){
+    try { return JSON.parse(localStorage.getItem(CONFIG.STORAGE_FAV)) || {}; }
+    catch(e){ return {}; }
+  },
+  _write(obj){ localStorage.setItem(CONFIG.STORAGE_FAV, JSON.stringify(obj)); },
+
+  // Firestore-ready 文件
+  toDoc(place, category, state){
+    const loc = place.geometry && place.geometry.location;
+    return {
+      placeId: place.place_id,
+      name: place.name || "",
+      address: place.formatted_address || place.vicinity || "",
+      rating: place.rating != null ? place.rating : null,
+      priceLevel: place.price_level != null ? place.price_level : null,
+      lat: loc ? loc.lat() : null,
+      lng: loc ? loc.lng() : null,
+      category: category,                 // want / been / pocket
+      country: (state && state.country) || null,
+      region: (state && state.region) || null,
+      phone: place.formatted_phone_number || null,
+      website: place.website || null,
+      mapUrl: place.url || null,
+      createdAt: Date.now(),
+      updatedAt: Date.now()
+    };
+  },
+
+  get(placeId){ return this._read()[placeId] || null; },
+  all(){ return Object.values(this._read()); },
+
+  set(place, category, state){
+    const data = this._read();
+    const existing = data[place.place_id];
+    const doc = this.toDoc(place, category, state);
+    if (existing) doc.createdAt = existing.createdAt;
+    data[place.place_id] = doc;
+    this._write(data);
+    return doc;
+  },
+  remove(placeId){
+    const data = this._read();
+    delete data[placeId];
+    this._write(data);
+  }
+};
+
+/* =====================================================================
+   App state + UI
+   ===================================================================== */
+const state = {
+  country:"TW", region:"", type:"restaurant", keyword:"",
+  price:"", minStar:"", openNow:false, buffet:false
+};
+let markers = [];
+let lastResults = [];
+
+const $ = sel => document.querySelector(sel);
+
+/* ---------- 登入 ---------- */
+function showApp(){
+  $("#login").style.display="none";
+  $("#app").style.display="flex";
+  buildRegionOptions();
+}
+function tryLogin(){
+  const v = $("#pw").value.trim();
+  if (v === CONFIG.ACCESS_PASSWORD){
+    sessionStorage.setItem(CONFIG.STORAGE_SESSION, "1");
+    $("#loginErr").textContent="";
+    showApp();
+  } else {
+    $("#loginErr").textContent="密碼錯誤，請再試一次。";
+    $("#pw").value="";
+  }
+}
+$("#loginBtn").addEventListener("click", tryLogin);
+$("#pw").addEventListener("keydown", e=>{ if(e.key==="Enter") tryLogin(); });
+$("#navLogout").addEventListener("click", ()=>{
+  sessionStorage.removeItem(CONFIG.STORAGE_SESSION);
+  location.reload();
+});
+if (sessionStorage.getItem(CONFIG.STORAGE_SESSION) === "1") showApp();
+
+/* ---------- chip 多狀態管理 ---------- */
+function singleChip(box, cb){
+  box.querySelectorAll(".chip").forEach(c=>{
+    c.addEventListener("click", ()=>{
+      box.querySelectorAll(".chip").forEach(x=>x.classList.remove("on"));
+      c.classList.add("on");
+      cb(c.dataset.v);
+    });
+  });
+}
+// 可清除的單選（再點一次取消）
+function toggleSingleChip(box, cb){
+  box.querySelectorAll(".chip").forEach(c=>{
+    c.addEventListener("click", ()=>{
+      const wasOn = c.classList.contains("on");
+      box.querySelectorAll(".chip").forEach(x=>x.classList.remove("on"));
+      if (!wasOn){ c.classList.add("on"); cb(c.dataset.v); }
+      else cb("");
+    });
+  });
+}
+
+singleChip($("#segCountry"), v=>{ state.country=v; buildRegionOptions(); });
+singleChip($("#segType"), v=>{ state.type=v; });
+toggleSingleChip($("#segKw"), v=>{ state.keyword=v; });
+toggleSingleChip($("#segPrice"), v=>{ state.price=v; });
+toggleSingleChip($("#segStar"), v=>{ state.minStar=v; });
+$("#chipOpen").addEventListener("click", function(){ this.classList.toggle("on"); state.openNow=this.classList.contains("on"); });
+$("#chipBuffet").addEventListener("click", function(){ this.classList.toggle("on"); state.buffet=this.classList.contains("on"); });
+
+$("#advToggle").addEventListener("click", function(){
+  const box=$("#advBox"); box.classList.toggle("show");
+  this.textContent = box.classList.contains("show") ? "進階篩選 ▴" : "進階篩選 ▾";
+});
+
+/* ---------- 地區選單 ---------- */
+function buildRegionOptions(){
+  const sel=$("#regionSel"), free=$("#regionFree"), lbl=$("#regionLbl");
+  if (state.country==="OTHER"){
+    sel.style.display="none"; free.style.display="block";
+    lbl.textContent="地區（自由輸入）";
+    state.region = free.value.trim();
+    return;
+  }
+  sel.style.display="block"; free.style.display="none";
+  lbl.textContent = state.country==="JP" ? "地區（城市 / 車站名稱）" : "地區（縣市）";
+  const list = REGIONS[state.country] || [];
+  sel.innerHTML = '<option value="">不限地區</option>' +
+    list.map(r=>`<option value="${r}">${r}</option>`).join("");
+  state.region = "";
+}
+$("#regionSel").addEventListener("change", e=>{ state.region=e.target.value; });
+$("#regionFree").addEventListener("input", e=>{ state.region=e.target.value.trim(); });
+
+/* ---------- 導覽切換 ---------- */
+function switchView(view){
+  const isFav = view==="fav";
+  $("#navSearch").classList.toggle("active", !isFav);
+  $("#navFav").classList.toggle("active", isFav);
+  $("#filters").style.display = isFav ? "none":"block";
+  $("#splitView").style.display = isFav ? "none":"flex";
+  $("#favView").classList.toggle("show", isFav);
+  if (isFav) renderFavList();
+}
+$("#navSearch").addEventListener("click", ()=>switchView("search"));
+$("#navFav").addEventListener("click", ()=>switchView("fav"));
+
+/* ---------- Google Maps 初始化 ---------- */
+function initMap(){
+  SearchEngine.map = new google.maps.Map($("#map"), {
+    center:{lat:23.7,lng:121},
+    zoom:7, mapTypeControl:false, streetViewControl:false, fullscreenControl:false
+  });
+  SearchEngine.service = new google.maps.places.PlacesService(SearchEngine.map);
+  SearchEngine.ready = true;
+  $("#mapWarn").style.display="none";
+}
+window.initMap = initMap;
+
+/* ---------- 載入 Maps script ---------- */
+(function loadMaps(){
+  if (!CONFIG.GOOGLE_API_KEY || CONFIG.GOOGLE_API_KEY==="YOUR_GOOGLE_API_KEY"){
+    $("#mapWarn").textContent="尚未設定 Google API Key。請開啟原始碼，於 CONFIG.GOOGLE_API_KEY 填入金鑰後重新整理。";
+    return;
+  }
+  const s=document.createElement("script");
+  s.src=`https://maps.googleapis.com/maps/api/js?key=${CONFIG.GOOGLE_API_KEY}&libraries=places&language=zh-TW&callback=initMap`;
+  s.async=true;
+  s.onerror=()=>{ $("#mapWarn").textContent="Google Maps 載入失敗，請確認金鑰、帳單與 API 啟用狀態。"; };
+  document.head.appendChild(s);
+})();
+
+/* ---------- 執行搜尋 ---------- */
+$("#searchBtn").addEventListener("click", doSearch);
+async function doSearch(){
+  if (!SearchEngine.ready){
+    toast("地圖尚未就緒，請先設定 API Key");
+    return;
+  }
+  const btn=$("#searchBtn"); btn.disabled=true; btn.textContent="搜尋中…";
+  $("#status").textContent="搜尋中…"; $("#status").style.display="block";
+  clearMarkers();
+  try{
+    const results = await SearchEngine.run(state);
+    lastResults = results;
+    renderResults(results);
+  }catch(err){
+    $("#status").textContent = err==="MAPS_NOT_READY"
+      ? "地圖尚未就緒，請設定 API Key。" : "搜尋發生問題（"+err+"），請調整條件再試。";
+  }finally{
+    btn.disabled=false; btn.textContent="🔍 搜尋美食";
+  }
+}
+
+/* ---------- 附近搜尋（手機定位） ---------- */
+$("#nearBtn").addEventListener("click", doNearby);
+function doNearby(){
+  if (!SearchEngine.ready){ toast("地圖尚未就緒，請先設定 API Key"); return; }
+  if (!navigator.geolocation){ toast("此瀏覽器不支援定位"); return; }
+  const btn=$("#nearBtn"); btn.disabled=true; btn.textContent="定位中…";
+  $("#status").textContent="正在取得你的位置…"; $("#status").style.display="block";
+  navigator.geolocation.getCurrentPosition(async pos=>{
+    const center={lat:pos.coords.latitude, lng:pos.coords.longitude};
+    clearMarkers();
+    if (SearchEngine.map){
+      new google.maps.Marker({
+        map:SearchEngine.map, position:center, title:"我的位置",
+        icon:{path:google.maps.SymbolPath.CIRCLE,scale:8,fillColor:"#1A73E8",fillOpacity:1,strokeColor:"#fff",strokeWeight:2}
+      });
+      SearchEngine.map.panTo(center); SearchEngine.map.setZoom(15);
+    }
+    $("#status").textContent="搜尋你附近…";
+    try{
+      const results = await SearchEngine.runNearby(state, center, 1500);
+      lastResults = results;
+      renderResults(results, true);
+    }catch(err){
+      $("#status").textContent="附近搜尋發生問題（"+err+"），請調整條件再試。";
+    }finally{
+      btn.disabled=false; btn.textContent="📍 我附近";
+    }
+  }, err=>{
+    btn.disabled=false; btn.textContent="📍 我附近";
+    const msg = err.code===1 ? "你拒絕了定位權限，請到瀏覽器設定開啟。"
+      : err.code===2 ? "目前無法取得位置，請確認定位已開啟。"
+      : "定位逾時，請再試一次。";
+    $("#status").textContent=msg; toast("定位失敗");
+  }, {enableHighAccuracy:true, timeout:10000, maximumAge:0});
+}
+function priceText(lv){ return lv==null ? "—" : "$".repeat(Math.max(1,lv)); }
+function openText(p){
+  const oh=p.opening_hours;
+  if (!oh) return "";
+  const o = (typeof oh.isOpen==="function") ? oh.isOpen() : oh.open_now;
+  if (o===true) return '<span class="open">營業中</span>';
+  if (o===false) return '<span class="closed">休息中</span>';
+  return "";
+}
+
+function renderResults(list){
+  const col=$("#listcol");
+  if (!list.length){
+    col.innerHTML='<div class="status">找不到符合條件的店家，試著放寬篩選或更換地區。</div>';
+    return;
+  }
+  col.innerHTML='<div class="status">共 '+list.length+' 間店家</div>';
+  list.forEach(p=>{
+    const card=document.createElement("div");
+    card.className="card";
+    card.innerHTML = `
+      <div class="head">
+        <div class="nm">${esc(p.name||"")}
+          <div class="meta">
+            ${p.rating!=null?'<span class="rate">★ '+p.rating.toFixed(1)+'</span>':''}
+            <span class="price">${priceText(p.price_level)}</span>
+            ${openText(p)}
+          </div>
+        </div>
+        <span style="color:var(--sub);font-size:13px">展開 ▾</span>
+      </div>
+      <div class="fav-row">
+        ${favBtn(p.place_id,"want","⭐ 想去")}
+        ${favBtn(p.place_id,"been","✅ 去過")}
+        ${favBtn(p.place_id,"pocket","📌 口袋")}
+      </div>
+      <div class="detail" id="d-${p.place_id}"></div>`;
+    const head=card.querySelector(".head");
+    head.addEventListener("click", ()=>toggleDetail(p, card.querySelector(".detail"), head));
+    card.querySelectorAll(".fav-row button").forEach(b=>{
+      b.addEventListener("click", e=>{ e.stopPropagation(); onFav(p, b.dataset.cat, card); });
+    });
+    col.appendChild(card);
+    addMarker(p);
+    refreshFavButtons(card, p.place_id);
+  });
+  fitMarkers();
+}
+
+function favBtn(id, cat, label){
+  return `<button data-cat="${cat}">${label}</button>`;
+}
+function refreshFavButtons(scope, placeId){
+  const cur = FavStore.get(placeId);
+  scope.querySelectorAll(".fav-row button").forEach(b=>{
+    b.classList.remove("set-want","set-been","set-pocket");
+    if (cur && cur.category===b.dataset.cat) b.classList.add("set-"+b.dataset.cat);
+  });
+}
+
+async function onFav(place, cat, card){
+  const cur = FavStore.get(place.place_id);
+  if (cur && cur.category===cat){
+    FavStore.remove(place.place_id);
+    toast("已移除收藏");
+  } else {
+    // 補抓詳細以存入完整資料
+    let full = place;
+    try { full = await SearchEngine.details(place.place_id); } catch(e){}
+    FavStore.set(full, cat, state);
+    toast(cat==="want"?"已加入 ⭐ 想去":cat==="been"?"已標記 ✅ 去過":"已加入 📌 口袋名單");
+  }
+  if (card) refreshFavButtons(card, place.place_id);
+}
+
+/* ---------- 展開店家詳細 ---------- */
+async function toggleDetail(p, box, head){
+  if (box.classList.contains("show")){
+    box.classList.remove("show");
+    head.querySelector("span:last-child").textContent="展開 ▾";
+    return;
+  }
+  head.querySelector("span:last-child").textContent="收合 ▴";
+  box.classList.add("show");
+  box.innerHTML='<div class="status" style="padding:4px 0">載入詳細…</div>';
+  try{
+    const d = await SearchEngine.details(p.place_id);
+    focusMarker(d);
+    const nav = d.geometry
+      ? `https://www.google.com/maps/dir/?api=1&destination=${d.geometry.location.lat()},${d.geometry.location.lng()}&destination_place_id=${d.place_id}`
+      : (d.url||"#");
+    box.innerHTML = `
+      <div class="drow"><b>地址</b><span>${esc(d.formatted_address||"—")}</span></div>
+      ${d.formatted_phone_number?`<div class="drow"><b>電話</b><a href="tel:${d.formatted_phone_number}">${d.formatted_phone_number}</a></div>`:""}
+      ${d.website?`<div class="drow"><b>官網</b><a href="${d.website}" target="_blank" rel="noopener">${d.website}</a></div>`:""}
+      <div class="acts">
+        <a href="${nav}" target="_blank" rel="noopener">🧭 導航</a>
+        <a class="alt" href="${d.url||"#"}" target="_blank" rel="noopener">在 Google 地圖開啟</a>
+      </div>`;
+  }catch(e){
+    box.innerHTML='<div class="status" style="padding:4px 0">無法載入詳細資訊。</div>';
+  }
+}
+
+/* ---------- 地圖標記 ---------- */
+function clearMarkers(){ markers.forEach(m=>m.setMap(null)); markers=[]; }
+function addMarker(p){
+  if (!p.geometry || !SearchEngine.map) return;
+  const m=new google.maps.Marker({
+    map:SearchEngine.map, position:p.geometry.location, title:p.name
+  });
+  const info=new google.maps.InfoWindow({
+    content:`<strong>${esc(p.name||"")}</strong><br>${p.rating!=null?"★ "+p.rating.toFixed(1):""}`
+  });
+  m.addListener("click", ()=>info.open(SearchEngine.map, m));
+  m._placeId=p.place_id;
+  markers.push(m);
+}
+function fitMarkers(){
+  if (!markers.length || !SearchEngine.map) return;
+  const b=new google.maps.LatLngBounds();
+  markers.forEach(m=>b.extend(m.getPosition()));
+  SearchEngine.map.fitBounds(b);
+  if (markers.length===1) SearchEngine.map.setZoom(16);
+}
+function focusMarker(d){
+  if (!d.geometry || !SearchEngine.map) return;
+  SearchEngine.map.panTo(d.geometry.location);
+  SearchEngine.map.setZoom(16);
+}
+
+/* ---------- 我的收藏 ---------- */
+let favFilter="all";
+function fav(){return FavStore.all();}
+$("#favFilter").querySelectorAll(".chip").forEach(c=>{
+  c.addEventListener("click", ()=>{
+    $("#favFilter").querySelectorAll(".chip").forEach(x=>x.classList.remove("on"));
+    c.classList.add("on"); favFilter=c.dataset.v; renderFavList();
+  });
+});
+const PILL = {want:["want","⭐ 想去"], been:["been","✅ 去過"], pocket:["pocket","📌 口袋名單"]};
+function renderFavList(){
+  const wrap=$("#favList");
+  let items = FavStore.all().sort((a,b)=>b.updatedAt-a.updatedAt);
+  if (favFilter!=="all") items=items.filter(i=>i.category===favFilter);
+  if (!items.length){
+    wrap.innerHTML='<div class="empty">這個分類還沒有收藏。<br>到「搜尋」標記想去、去過或口袋名單吧。</div>';
+    return;
+  }
+  wrap.innerHTML="";
+  items.forEach(it=>{
+    const nav = (it.lat!=null)
+      ? `https://www.google.com/maps/dir/?api=1&destination=${it.lat},${it.lng}&destination_place_id=${it.placeId}`
+      : (it.mapUrl||"#");
+    const card=document.createElement("div");
+    card.className="card";
+    card.innerHTML=`
+      <div class="head" style="cursor:default">
+        <div class="nm">${esc(it.name)}
+          <div class="meta">
+            ${it.rating!=null?'<span class="rate">★ '+it.rating.toFixed(1)+'</span>':''}
+            <span class="price">${it.priceLevel!=null?"$".repeat(Math.max(1,it.priceLevel)):"—"}</span>
+            <span class="pill ${PILL[it.category][0]}">${PILL[it.category][1]}</span>
+          </div>
+          <div class="meta">${esc(it.address||"")}</div>
+        </div>
+      </div>
+      <div class="detail show" style="border-top:none;background:transparent">
+        ${it.phone?`<div class="drow"><b>電話</b><a href="tel:${it.phone}">${it.phone}</a></div>`:""}
+        ${it.website?`<div class="drow"><b>官網</b><a href="${it.website}" target="_blank" rel="noopener">${it.website}</a></div>`:""}
+        <div class="acts">
+          <a href="${nav}" target="_blank" rel="noopener">🧭 導航</a>
+          <a class="alt" href="${it.mapUrl||nav}" target="_blank" rel="noopener">地圖</a>
+        </div>
+        <div class="fav-row" style="padding:12px 0 0">
+          <button data-c="want"  class="${it.category==='want'?'set-want':''}">⭐ 想去</button>
+          <button data-c="been"  class="${it.category==='been'?'set-been':''}">✅ 去過</button>
+          <button data-c="pocket"class="${it.category==='pocket'?'set-pocket':''}">📌 口袋</button>
+          <button data-c="del" style="flex:.6;color:var(--accent-d)">🗑 刪除</button>
+        </div>
+      </div>`;
+    card.querySelectorAll(".fav-row button").forEach(b=>{
+      b.addEventListener("click", ()=>{
+        if (b.dataset.c==="del"){ FavStore.remove(it.placeId); toast("已刪除"); }
+        else {
+          const data=FavStore._read(); data[it.placeId].category=b.dataset.c;
+          data[it.placeId].updatedAt=Date.now(); FavStore._write(data);
+          toast("已更新分類");
+        }
+        renderFavList();
+      });
+    });
+    wrap.appendChild(card);
+  });
+}
+
+/* ---------- 小工具 ---------- */
+function esc(s){ return String(s).replace(/[&<>"]/g, c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c])); }
+let toastTimer;
+function toast(msg){
+  const t=$("#toast"); t.textContent=msg; t.classList.add("show");
+  clearTimeout(toastTimer); toastTimer=setTimeout(()=>t.classList.remove("show"),1800);
+}
+</script>
+</body>
+</html>
