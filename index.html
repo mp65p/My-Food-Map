@@ -166,9 +166,12 @@
   .toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
 
   @media (max-width:820px){
-    .split{flex-direction:column-reverse}
-    .listcol{width:100%;max-width:none;min-width:0;border-right:none;border-top:1px solid var(--line);flex:1}
-    .mapcol{height:260px;flex:none}
+    html,body{height:auto}
+    #app{height:auto;min-height:100vh}
+    main{flex:none}
+    .split{flex-direction:column;height:auto}
+    .listcol{width:100%;max-width:none;min-width:0;border-right:none;overflow:visible}
+    .mapcol{order:-1;height:300px;flex:none;border-bottom:1px solid var(--line)}
     header.top nav button{padding:7px 11px}
   }
 </style>
@@ -181,7 +184,7 @@
     <div class="logo">🍜</div>
     <h1>食光地圖</h1>
     <p>美食搜尋與收藏系統</p>
-    <input id="pw" type="password" placeholder="輸入密碼" autocomplete="off" inputmode="text">
+    <input id="pw" type="password" placeholder="輸入授權碼" autocomplete="off" inputmode="text">
     <button id="loginBtn">進入系統</button>
     <div class="login-err" id="loginErr"></div>
   </div>
@@ -249,9 +252,9 @@
         <div class="grp" style="margin-top:10px">
           <span class="lbl">價位</span>
           <div class="seg" id="segPrice">
-            <div class="chip" data-v="1">$</div>
-            <div class="chip" data-v="2">$$</div>
-            <div class="chip" data-v="3">$$$</div>
+            <div class="chip" data-v="low">平價</div>
+            <div class="chip" data-v="mid">中等</div>
+            <div class="chip" data-v="high">高價</div>
           </div>
         </div>
         <div class="grp">
@@ -303,6 +306,9 @@
 
 <div class="toast" id="toast"></div>
 
+<!-- Firebase（Realtime Database，compat 版，單檔免打包） -->
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
 <script>
 /* =====================================================================
    食光地圖 — 單一檔案美食搜尋與收藏系統
@@ -314,8 +320,18 @@
 /* ====== 設定區 ====== */
 const CONFIG = {
   GOOGLE_API_KEY: "AIzaSyDwDkp_ISyy5YEwmWbtq64YIHNhWNDb9fw",   // ← 你的 Google API Key（請務必在 Cloud Console 設網域限制）
-  ACCESS_PASSWORD: "1234",                  // ← 進入系統的密碼（可自行修改）
-  STORAGE_FAV: "foodmap_favorites_v1",
+  ACCESS_CODE: "0430",                       // ← 進入系統的授權碼
+  FIREBASE: {
+    apiKey: "AIzaSyBGfQ1oKOrt723tJ3w7LIwDLSh0nGwRF30",
+    authDomain: "my-project-c89db.firebaseapp.com",
+    databaseURL: "https://my-project-c89db-default-rtdb.firebaseio.com",
+    projectId: "my-project-c89db",
+    storageBucket: "my-project-c89db.firebasestorage.app",
+    messagingSenderId: "301172719437",
+    appId: "1:301172719437:web:94d3444dd629f81ac38104"
+  },
+  DB_PATH: "foodmap_favorites",              // RTDB 獨立路徑，與行事曆/舊食光地圖分開
+  STORAGE_FAV: "foodmap_favorites_v1",       // localStorage 離線快取
   STORAGE_SESSION: "foodmap_auth"
 };
 
@@ -346,6 +362,15 @@ const SearchEngine = {
     return parts.join(" ");
   },
 
+  // 價位分級對應 Google price_level（0–4）
+  // 平價 low: 0–1 / 中等 mid: 2 / 高價 high: 3–4
+  priceRange(bucket){
+    if (bucket==="low")  return {min:0, max:1};
+    if (bucket==="mid")  return {min:2, max:2};
+    if (bucket==="high") return {min:3, max:4};
+    return null;
+  },
+
   // 組出 textSearch 請求（type + keyword 組合）
   buildRequest(s){
     const req = {
@@ -353,15 +378,19 @@ const SearchEngine = {
       type: s.type || "restaurant"
     };
     if (s.openNow) req.openNow = true;
-    if (s.maxPrice) { req.minPrice = 0; req.maxPrice = Number(s.maxPrice); }
+    const pr = this.priceRange(s.price);
+    if (pr){ req.minPrice = pr.min; req.maxPrice = pr.max; }
     return req;
   },
 
-  // Google 回傳後的客戶端二次篩選（星級、價位下限、吃到飽字樣）
+  // Google 回傳後的客戶端二次篩選（星級、價位區間、吃到飽字樣）
   applyClientFilters(results, s){
+    const pr = this.priceRange(s.price);
     return results.filter(p=>{
       if (s.minStar && (p.rating||0) < Number(s.minStar)) return false;
-      if (s.price && p.price_level != null && Number(p.price_level) !== Number(s.price)) return false;
+      if (pr && p.price_level != null){
+        if (p.price_level < pr.min || p.price_level > pr.max) return false;
+      }
       if (s.buffet){
         const t = ((p.name||"") + " " + (p.formatted_address||p.vicinity||"")).toLowerCase();
         if (!/吃到飽|食べ放題|all you can eat|buffet|バイキング/i.test(t)) {
@@ -405,7 +434,8 @@ const SearchEngine = {
       if (state.buffet) kw.push("吃到飽");
       if (kw.length) req.keyword = kw.join(" ");
       if (state.openNow) req.openNow = true;
-      if (state.maxPrice) { req.minPrice = 0; req.maxPrice = Number(state.maxPrice); }
+      const pr = this.priceRange(state.price);
+      if (pr){ req.minPrice = pr.min; req.maxPrice = pr.max; }
       this.service.nearbySearch(req, (results, status)=>{
         const OK = google.maps.places.PlacesServiceStatus.OK;
         const ZERO = google.maps.places.PlacesServiceStatus.ZERO_RESULTS;
@@ -432,17 +462,48 @@ const SearchEngine = {
 };
 
 /* =====================================================================
-   FavStore：收藏資料層（localStorage）。Schema 對齊 Firestore 文件結構
-   doc id = placeId → 之後可直接寫入 collection("favorites")
+   FavStore：收藏資料層
+   - 主儲存：Firebase Realtime Database（雲端，跨裝置同步）
+   - 離線快取：localStorage（沒網路時仍可瀏覽收藏）
+   - 記憶體 _cache 讓 UI 仍可同步讀取
+   Schema 對齊文件結構，key = placeId
    ===================================================================== */
 const FavStore = {
-  _read(){
-    try { return JSON.parse(localStorage.getItem(CONFIG.STORAGE_FAV)) || {}; }
-    catch(e){ return {}; }
-  },
-  _write(obj){ localStorage.setItem(CONFIG.STORAGE_FAV, JSON.stringify(obj)); },
+  _cache: {},
+  ref: null,
+  ready: false,
+  onChange: null,
 
-  // Firestore-ready 文件
+  // 初始化 Firebase；失敗則退回純 localStorage
+  init(onChange){
+    this.onChange = onChange;
+    // 先載入離線快取，畫面立即有資料
+    try { this._cache = JSON.parse(localStorage.getItem(CONFIG.STORAGE_FAV)) || {}; }
+    catch(e){ this._cache = {}; }
+    try{
+      if (!window.firebase || !firebase.initializeApp) throw new Error("no-sdk");
+      if (!firebase.apps.length) firebase.initializeApp(CONFIG.FIREBASE);
+      this.ref = firebase.database().ref(CONFIG.DB_PATH);
+      // 即時監聽：雲端有變動就更新快取並重繪
+      this.ref.on("value", snap=>{
+        this._cache = snap.val() || {};
+        this._mirror();
+        this.ready = true;
+        if (this.onChange) this.onChange();
+      }, err=>{
+        console.warn("RTDB 讀取失敗，改用離線快取：", err);
+        this.ready = false;
+        if (this.onChange) this.onChange();
+      });
+    }catch(e){
+      console.warn("Firebase 未就緒，改用離線快取：", e);
+      this.ready = false;
+    }
+  },
+
+  _mirror(){ localStorage.setItem(CONFIG.STORAGE_FAV, JSON.stringify(this._cache)); },
+
+  // 文件結構（Firestore/RTDB 通用）
   toDoc(place, category, state){
     const loc = place.geometry && place.geometry.location;
     return {
@@ -464,22 +525,31 @@ const FavStore = {
     };
   },
 
-  get(placeId){ return this._read()[placeId] || null; },
-  all(){ return Object.values(this._read()); },
+  get(placeId){ return this._cache[placeId] || null; },
+  all(){ return Object.values(this._cache); },
 
   set(place, category, state){
-    const data = this._read();
-    const existing = data[place.place_id];
+    const existing = this._cache[place.place_id];
     const doc = this.toDoc(place, category, state);
     if (existing) doc.createdAt = existing.createdAt;
-    data[place.place_id] = doc;
-    this._write(data);
+    this._cache[place.place_id] = doc;
+    this._mirror();
+    if (this.ref) this.ref.child(place.place_id).set(doc).catch(e=>console.warn("雲端寫入失敗：",e));
     return doc;
   },
+
+  updateCategory(placeId, category){
+    const d = this._cache[placeId];
+    if (!d) return;
+    d.category = category; d.updatedAt = Date.now();
+    this._mirror();
+    if (this.ref) this.ref.child(placeId).update({category, updatedAt:d.updatedAt}).catch(e=>console.warn(e));
+  },
+
   remove(placeId){
-    const data = this._read();
-    delete data[placeId];
-    this._write(data);
+    delete this._cache[placeId];
+    this._mirror();
+    if (this.ref) this.ref.child(placeId).remove().catch(e=>console.warn("雲端刪除失敗：",e));
   }
 };
 
@@ -496,19 +566,25 @@ let lastResults = [];
 const $ = sel => document.querySelector(sel);
 
 /* ---------- 登入 ---------- */
+let favInited = false;
 function showApp(){
   $("#login").style.display="none";
   $("#app").style.display="flex";
   buildRegionOptions();
+  if (!favInited){
+    favInited = true;
+    // 啟動雲端收藏同步；雲端有變動時，若正在看收藏頁就自動重繪
+    FavStore.init(()=>{ if ($("#favView").classList.contains("show")) renderFavList(); });
+  }
 }
 function tryLogin(){
   const v = $("#pw").value.trim();
-  if (v === CONFIG.ACCESS_PASSWORD){
+  if (v === CONFIG.ACCESS_CODE){
     sessionStorage.setItem(CONFIG.STORAGE_SESSION, "1");
     $("#loginErr").textContent="";
     showApp();
   } else {
-    $("#loginErr").textContent="密碼錯誤，請再試一次。";
+    $("#loginErr").textContent="授權碼錯誤，請再試一次。";
     $("#pw").value="";
   }
 }
@@ -669,7 +745,12 @@ function doNearby(){
     $("#status").textContent=msg; toast("定位失敗");
   }, {enableHighAccuracy:true, timeout:10000, maximumAge:0});
 }
-function priceText(lv){ return lv==null ? "—" : "$".repeat(Math.max(1,lv)); }
+function priceText(lv){
+  if (lv==null) return "價位未提供";
+  if (lv<=1) return "平價";
+  if (lv===2) return "中等";
+  return "高價";
+}
 function openText(p){
   const oh=p.opening_hours;
   if (!oh) return "";
@@ -830,7 +911,7 @@ function renderFavList(){
         <div class="nm">${esc(it.name)}
           <div class="meta">
             ${it.rating!=null?'<span class="rate">★ '+it.rating.toFixed(1)+'</span>':''}
-            <span class="price">${it.priceLevel!=null?"$".repeat(Math.max(1,it.priceLevel)):"—"}</span>
+            <span class="price">${priceText(it.priceLevel)}</span>
             <span class="pill ${PILL[it.category][0]}">${PILL[it.category][1]}</span>
           </div>
           <div class="meta">${esc(it.address||"")}</div>
@@ -853,11 +934,7 @@ function renderFavList(){
     card.querySelectorAll(".fav-row button").forEach(b=>{
       b.addEventListener("click", ()=>{
         if (b.dataset.c==="del"){ FavStore.remove(it.placeId); toast("已刪除"); }
-        else {
-          const data=FavStore._read(); data[it.placeId].category=b.dataset.c;
-          data[it.placeId].updatedAt=Date.now(); FavStore._write(data);
-          toast("已更新分類");
-        }
+        else { FavStore.updateCategory(it.placeId, b.dataset.c); toast("已更新分類"); }
         renderFavList();
       });
     });
