@@ -143,12 +143,15 @@
   .listcol{
     flex:1;min-width:0;overflow-y:auto;background:var(--bg);
   }
-  /* 地圖預設收起；按鈕展開才顯示 */
+  /* 單一地圖面板，可在搜尋／收藏間搬移；預設收起 */
   .mapcol{
-    width:46%;max-width:560px;position:relative;border-left:1px solid var(--line);display:none;
+    display:none;position:relative;height:320px;margin:10px 12px;
+    border:1px solid var(--line);border-radius:var(--radius);overflow:hidden;
   }
-  .split.map-on .mapcol{display:block}
+  .mapcol.shown{display:block}
   #map{position:absolute;inset:0}
+  .req{display:inline-block;margin-left:6px;font-size:10px;font-weight:700;color:#fff;background:#C0392B;border-radius:4px;padding:1px 5px;vertical-align:middle}
+  .opt{display:inline-block;margin-left:6px;font-size:10px;color:#9a9a9a;border:1px solid #d8d2c8;border-radius:4px;padding:1px 5px;vertical-align:middle}
   .map-warn{
     position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
     text-align:center;color:var(--sub);font-size:13px;padding:24px;background:#F1ECE3;
@@ -180,7 +183,7 @@
   }
   .fav-row button.set-want{background:#FFF3E8;border-color:#F4C99F;color:var(--accent-d)}
   .fav-row button.set-been{background:#EAF5EE;border-color:#A9D4BC;color:var(--green)}
-  .fav-row button.set-pocket{background:#EEF1F5;border-color:#B7C3D0;color:var(--pin)}
+  .fav-row button.set-pocket{background:#FCE7EF;border-color:#F0A9C4;color:#D6477E}
 
   .detail{border-top:1px solid var(--line);padding:14px;display:none;background:#FCFAF6}
   .detail.show{display:block}
@@ -200,22 +203,16 @@
   /* ---------- Favorites view ---------- */
   .fav-view{display:none;flex:1;overflow-y:auto;background:var(--bg)}
   .fav-view.show{display:block}
-  .fav-filter{display:flex;gap:6px;flex-wrap:wrap;flex:1}
-  .fav-bar{display:flex;align-items:flex-start;gap:8px;padding:14px 16px 4px}
-  .fav-bar #favMapToggle{
-    border:1px solid var(--line);background:#fff;border-radius:999px;
-    padding:7px 13px;font-size:13px;color:var(--accent-d);font-weight:600;white-space:nowrap;
-  }
+  .fav-bar{display:flex;gap:6px;padding:14px 16px 4px;overflow-x:auto;-webkit-overflow-scrolling:touch}
+  .fav-bar .chip{white-space:nowrap;flex:0 0 auto}
+  .fav-bar #favMapToggle{margin-left:auto;color:var(--accent-d);font-weight:600}
   .fav-bar #favMapToggle.on{background:var(--accent);border-color:var(--accent);color:#fff}
-  #favMapWrap{display:none;height:300px;margin:10px 12px;border:1px solid var(--line);border-radius:var(--radius);overflow:hidden;position:relative}
-  #favMapWrap.show{display:block}
-  #favMap{position:absolute;inset:0}
   .empty{text-align:center;color:var(--sub);padding:60px 24px;font-size:14px}
 
   .pill{display:inline-block;font-size:11.5px;padding:2px 9px;border-radius:999px;font-weight:600}
   .pill.want{background:#FFF3E8;color:var(--accent-d)}
   .pill.been{background:#EAF5EE;color:var(--green)}
-  .pill.pocket{background:#EEF1F5;color:var(--pin)}
+  .pill.pocket{background:#FCE7EF;color:#D6477E}
 
   .toast{
     position:fixed;left:50%;bottom:28px;transform:translateX(-50%) translateY(20px);
@@ -230,7 +227,7 @@
     main{flex:none}
     .split{flex-direction:column;height:auto}
     .listcol{width:100%;min-width:0;overflow:visible}
-    .mapcol{width:100%;max-width:none;border-left:none;border-top:1px solid var(--line);height:320px}
+    .mapcol{height:300px}
     header.top nav button{padding:7px 11px}
   }
 </style>
@@ -255,6 +252,7 @@
     <div class="brand"><span>🍜</span>食光地圖</div>
     <nav>
       <button id="navSearch" class="active">搜尋</button>
+      <button id="navNearby">我的附近</button>
       <button id="navFav">我的收藏</button>
       <button id="navLogout" style="color:var(--accent-d)">登出</button>
     </nav>
@@ -263,8 +261,8 @@
   <main>
     <!-- ---- Filters (search view) ---- -->
     <section class="filters" id="filters">
-      <div class="grp">
-        <span class="lbl">國家</span>
+      <div class="grp" id="grpCountry">
+        <span class="lbl">國家<span class="req">必填</span></span>
         <div class="seg" id="segCountry">
           <div class="chip on" data-v="TW">台灣</div>
           <div class="chip" data-v="JP">日本</div>
@@ -272,8 +270,8 @@
         </div>
       </div>
 
-      <div class="grp">
-        <span class="lbl" id="regionLbl">地區（縣市）</span>
+      <div class="grp" id="grpRegion">
+        <span class="lbl" id="regionLbl">地區（縣市）<span class="req">必填</span></span>
         <div class="row">
           <select class="field" id="regionSel"></select>
           <input class="field" id="regionFree" placeholder="自由輸入地區 / 車站名稱" style="display:none">
@@ -282,8 +280,17 @@
         <input class="field" id="areaInput" placeholder="區域（選填）例：三宮、難波、車站名…" style="display:none;margin-top:8px;width:100%">
       </div>
 
-      <div class="grp">
-        <span class="lbl">店家類別</span>
+      <div class="grp" id="grpDistance" style="display:none">
+        <span class="lbl">距離<span class="req">必填</span></span>
+        <div class="seg" id="segDistance">
+          <div class="chip" data-v="500">500公尺</div>
+          <div class="chip on" data-v="1000">1公里</div>
+          <div class="chip" data-v="3000">3公里</div>
+        </div>
+      </div>
+
+      <div class="grp" id="grpType">
+        <span class="lbl">店家類別<span class="req">必填</span></span>
         <div class="seg" id="segType">
           <div class="chip on" data-v="restaurant">餐廳</div>
           <div class="chip" data-v="cafe">咖啡廳</div>
@@ -295,7 +302,7 @@
       </div>
 
       <div class="grp">
-        <span class="lbl">餐廳類別
+        <span class="lbl">餐廳類別<span class="opt">選填</span>
           <span id="kwSelected" class="kw-selected" style="display:none"></span>
         </span>
         <div class="accordion" id="kwAccordion">
@@ -339,10 +346,10 @@
         <input class="field kw-free" id="kwFree" placeholder="或自行輸入，例：飲品、丼飯、鹹酥雞…" style="margin-top:8px">
       </div>
 
-      <button class="adv-toggle" id="advToggle">進階篩選 ▾</button>
+      <button class="adv-toggle" id="advToggle">進階篩選（選填） ▾</button>
       <div class="adv" id="advBox">
         <div class="grp" style="margin-top:10px">
-          <span class="lbl">價位</span>
+          <span class="lbl">價位<span class="opt">選填</span></span>
           <div class="seg" id="segPrice">
             <div class="chip" data-v="low">平價</div>
             <div class="chip" data-v="mid">中等</div>
@@ -367,13 +374,12 @@
       </div>
 
       <div class="btn-row">
-        <button class="search-btn" id="searchBtn">🔍 搜尋美食</button>
-        <button class="near-btn" id="nearBtn">📍 我附近</button>
+        <button class="search-btn" id="searchBtn" style="width:100%">🔍 搜尋美食</button>
       </div>
     </section>
 
     <!-- ---- Results: list primary, map optional ---- -->
-    <div class="result-bar">
+    <div class="result-bar" id="resultBar">
       <span id="resultCount">設定條件後按「搜尋美食」</span>
       <button id="mapToggle">🗺 顯示地圖</button>
     </div>
@@ -389,16 +395,13 @@
 
     <!-- ---- Favorites view ---- -->
     <div class="fav-view" id="favView">
-      <div class="fav-bar">
-        <div class="fav-filter" id="favFilter">
-          <div class="chip on" data-v="all">全部</div>
-          <div class="chip" data-v="want">⭐ 想去</div>
-          <div class="chip" data-v="been">✅ 去過</div>
-          <div class="chip" data-v="pocket">📌 口袋名單</div>
-        </div>
-        <button id="favMapToggle">🗺 地圖</button>
+      <div class="fav-bar" id="favBar">
+        <div class="chip on" data-v="want">⭐ 想去</div>
+        <div class="chip" data-v="been">✅ 去過</div>
+        <div class="chip" data-v="pocket">❤️ 收藏</div>
+        <button id="favMapToggle" class="chip">🗺 地圖</button>
       </div>
-      <div id="favMapWrap"><div id="favMap"></div></div>
+      <div id="favMapSlot"></div>
       <div id="favList"></div>
     </div>
   </main>
@@ -744,7 +747,7 @@ const FavStore = {
 const state = {
   country:"TW", region:"", area:"", type:"restaurant", typeKw:"",
   cats:[], freeKw:"",        // 餐廳類別（複選，最多3）/ 自行輸入
-  prices:[], minStar:"", openNow:false, buffet:false
+  prices:[], minStar:"", openNow:false, buffet:false, distance:1000
 };
 const MAX_CATS = 3;
 // 實際要搜的關鍵字陣列：有自行輸入就只用輸入；否則用複選的類別
@@ -954,16 +957,40 @@ $("#districtSel").addEventListener("change", e=>{ state.area=e.target.value; });
 $("#areaInput").addEventListener("input", e=>{ state.area=e.target.value.trim(); });
 
 /* ---------- 導覽切換 ---------- */
+let appMode = "search";   // search | nearby | fav
 function switchView(view){
+  appMode = view;
   const isFav = view==="fav";
-  $("#navSearch").classList.toggle("active", !isFav);
+  const isNear = view==="nearby";
+  $("#navSearch").classList.toggle("active", view==="search");
+  $("#navNearby").classList.toggle("active", isNear);
   $("#navFav").classList.toggle("active", isFav);
   $("#filters").style.display = isFav ? "none":"block";
+  $("#resultBar").style.display = isFav ? "none":"flex";
   $("#splitView").style.display = isFav ? "none":"flex";
   $("#favView").classList.toggle("show", isFav);
+  // 搜尋 vs 我的附近：切換欄位顯示
+  if (!isFav){
+    $("#grpCountry").style.display = isNear ? "none":"block";
+    $("#grpRegion").style.display  = isNear ? "none":"block";
+    $("#grpDistance").style.display= isNear ? "block":"none";
+    $("#searchBtn").textContent = isNear ? "📍 搜尋我附近" : "🔍 搜尋美食";
+    // 換模式清空上次結果列
+    setBar(isNear ? "按「搜尋我附近」找周邊" : "設定條件後按「搜尋美食」");
+    $("#listcol").innerHTML="";
+  }
+  // 共用地圖收回搜尋區、隱藏，並重置地圖按鈕與檢視模式
+  const mc=$("#mapcol");
+  mc.classList.remove("shown");
+  $("#splitView").appendChild(mc);
+  $("#mapToggle").classList.remove("on"); $("#mapToggle").textContent="🗺 顯示地圖";
+  favMapMode=false;
+  $("#favMapToggle").classList.remove("on"); $("#favMapToggle").textContent="🗺 地圖";
+  $("#favList").style.display="";
   if (isFav) renderFavList();
 }
 $("#navSearch").addEventListener("click", ()=>switchView("search"));
+$("#navNearby").addEventListener("click", ()=>switchView("nearby"));
 $("#navFav").addEventListener("click", ()=>switchView("fav"));
 
 /* ---------- Google Maps 初始化 ---------- */
@@ -978,14 +1005,14 @@ function initMap(){
 }
 window.initMap = initMap;
 
-/* ---------- 地圖顯示／收起 ---------- */
-$("#mapToggle").addEventListener("click", ()=>{
-  const sv=$("#splitView"), btn=$("#mapToggle");
-  const on = sv.classList.toggle("map-on");
-  btn.classList.toggle("on", on);
-  btn.textContent = on ? "🗺 隱藏地圖" : "🗺 顯示地圖";
+/* ---------- 地圖顯示／收起（搜尋頁，共用同一個地圖） ---------- */
+$("#mapToggle").addEventListener("click", function(){
+  const mc=$("#mapcol");
+  if (mc.parentElement.id !== "splitView") $("#splitView").appendChild(mc);
+  const on = mc.classList.toggle("shown");
+  this.classList.toggle("on", on);
+  this.textContent = on ? "🗺 隱藏地圖" : "🗺 顯示地圖";
   if (on && SearchEngine.map){
-    // 由隱藏轉顯示，需重算地圖尺寸並重新對焦
     setTimeout(()=>{
       google.maps.event.trigger(SearchEngine.map, "resize");
       if (markers.length) fitMarkers(); else SearchEngine.map.setCenter({lat:23.7,lng:121});
@@ -1007,7 +1034,10 @@ $("#mapToggle").addEventListener("click", ()=>{
 })();
 
 /* ---------- 執行搜尋 ---------- */
-$("#searchBtn").addEventListener("click", doSearch);
+// 主按鈕依模式分流：搜尋頁→doSearch；我的附近→doNearby
+$("#searchBtn").addEventListener("click", ()=>{ appMode==="nearby" ? doNearby() : doSearch(); });
+// 距離單選（我的附近）
+singleChip($("#segDistance"), v=>{ state.distance=Number(v); });
 function searchErrMsg(err){
   const map = {
     "MAPS_NOT_READY":"地圖尚未就緒，請確認 API Key。",
@@ -1022,6 +1052,12 @@ function searchErrMsg(err){
 async function doSearch(){
   if (!SearchEngine.ready){
     toast("地圖尚未就緒，請先設定 API Key");
+    return;
+  }
+  // 地區為必填：沒選縣市就提示
+  if (!state.region){
+    toast("請先選擇地區（縣市）");
+    $("#grpRegion").scrollIntoView({behavior:"smooth", block:"center"});
     return;
   }
   const btn=$("#searchBtn"); btn.disabled=true; btn.textContent="搜尋中…";
@@ -1072,14 +1108,13 @@ async function topUpTo(target){
 function setStatus(html){ const c=$("#listcol"); if(c) c.innerHTML='<div class="status">'+html+'</div>'; }
 function setBar(text){ const b=$("#resultCount"); if(b) b.textContent=text; }
 
-/* ---------- 附近搜尋（手機定位） ---------- */
-$("#nearBtn").addEventListener("click", doNearby);
+/* ---------- 我的附近（手機定位） ---------- */
 function doNearby(){
   if (!SearchEngine.ready){ toast("地圖尚未就緒，請先設定 API Key"); return; }
   if (!navigator.geolocation){ toast("此瀏覽器不支援定位"); return; }
   // 附近搜尋會用到地圖標位，自動展開地圖
-  if (!$("#splitView").classList.contains("map-on")) $("#mapToggle").click();
-  const btn=$("#nearBtn"); btn.disabled=true; btn.textContent="定位中…";
+  if (!$("#mapcol").classList.contains("shown")) $("#mapToggle").click();
+  const btn=$("#searchBtn"); btn.disabled=true; btn.textContent="定位中…";
   setBar("定位中…"); setStatus("正在取得你的位置…");
   navigator.geolocation.getCurrentPosition(async pos=>{
     const center={lat:pos.coords.latitude, lng:pos.coords.longitude};
@@ -1094,17 +1129,17 @@ function doNearby(){
     setStatus("搜尋你附近…");
     try{
       SearchEngine.pagination=null; resultBuffer=[]; shownCount=0;
-      const results = await SearchEngine.runNearby(state, center, 1500);
+      const results = await SearchEngine.runNearby(state, center, state.distance||1000);
       resultBuffer = results.slice(); shownCount = results.length;
       renderResults(results);
       refreshLoadMore();
     }catch(err){
       setBar("搜尋失敗"); setStatus('<b style="color:var(--accent-d)">⚠ '+esc(searchErrMsg(err))+'</b>');
     }finally{
-      btn.disabled=false; btn.textContent="📍 我附近";
+      btn.disabled=false; btn.textContent="📍 搜尋我附近";
     }
   }, err=>{
-    btn.disabled=false; btn.textContent="📍 我附近";
+    btn.disabled=false; btn.textContent="📍 搜尋我附近";
     const msg = err.code===1 ? "你拒絕了定位權限，請到瀏覽器設定開啟。"
       : err.code===2 ? "目前無法取得位置，請確認定位已開啟。"
       : "定位逾時，請再試一次。";
@@ -1159,7 +1194,7 @@ function renderResults(list, append){
       <div class="fav-row">
         ${favBtn(p.place_id,"want","⭐ 想去")}
         ${favBtn(p.place_id,"been","✅ 去過")}
-        ${favBtn(p.place_id,"pocket","📌 口袋")}
+        ${favBtn(p.place_id,"pocket","❤️ 收藏")}
       </div>
       <div class="detail" id="d-${p.place_id}"></div>`;
     const head=card.querySelector(".head");
@@ -1171,7 +1206,7 @@ function renderResults(list, append){
     addMarker(p);
     refreshFavButtons(card, p.place_id);
   });
-  if ($("#splitView").classList.contains("map-on")) fitMarkers();
+  if ($("#mapcol").classList.contains("shown")) fitMarkers();
 }
 
 /* ---------- 載入更多 ---------- */
@@ -1228,7 +1263,7 @@ async function onFav(place, cat, card){
     try { full = await SearchEngine.details(place.place_id); } catch(e){}
     if (full.user_ratings_total == null) full.user_ratings_total = place.user_ratings_total;
     FavStore.set(full, cat, state);
-    toast(cat==="want"?"已加入 ⭐ 想去":cat==="been"?"已標記 ✅ 去過":"已加入 📌 口袋名單");
+    toast(cat==="want"?"已加入 ⭐ 想去":cat==="been"?"已標記 ✅ 去過":"已加入 ❤️ 收藏");
   }
   if (card) refreshFavButtons(card, place.place_id);
 }
@@ -1303,59 +1338,67 @@ function focusMarker(d){
 }
 
 /* ---------- 我的收藏 ---------- */
-let favFilter="all";
-function fav(){return FavStore.all();}
-$("#favFilter").querySelectorAll(".chip").forEach(c=>{
+let favFilter="want";       // 預設「想去」
+let favMapMode=false;       // false=清單, true=地圖呈現
+// 分類單選（地圖按鈕除外）
+$("#favBar").querySelectorAll(".chip[data-v]").forEach(c=>{
   c.addEventListener("click", ()=>{
-    $("#favFilter").querySelectorAll(".chip").forEach(x=>x.classList.remove("on"));
-    c.classList.add("on"); favFilter=c.dataset.v; renderFavList();
-    if ($("#favMapWrap").classList.contains("show")) plotFavMap();
+    $("#favBar").querySelectorAll(".chip[data-v]").forEach(x=>x.classList.remove("on"));
+    c.classList.add("on"); favFilter=c.dataset.v;
+    if (favMapMode) plotFavMap();   // 地圖模式 → 換成這類的地圖
+    else renderFavList();           // 清單模式 → 換成這類的清單
   });
 });
 
-/* ---------- 收藏地圖檢視 ---------- */
-let favMap=null, favMarkers=[];
+/* ---------- 地圖呈現（取代清單，共用同一個地圖） ---------- */
 $("#favMapToggle").addEventListener("click", function(){
-  const on = $("#favMapWrap").classList.toggle("show");
-  this.classList.toggle("on", on);
-  if (on) plotFavMap();
+  favMapMode = !favMapMode;
+  this.classList.toggle("on", favMapMode);
+  this.textContent = favMapMode ? "📋 清單" : "🗺 地圖";
+  const mc=$("#mapcol");
+  if (favMapMode){
+    $("#favMapSlot").appendChild(mc);
+    mc.classList.add("shown");
+    $("#favList").style.display="none";   // 隱藏清單，改地圖呈現
+    plotFavMap();
+  } else {
+    mc.classList.remove("shown");
+    $("#favList").style.display="";       // 回到清單
+    renderFavList();
+  }
 });
 function plotFavMap(){
-  if (!SearchEngine.ready || !window.google){ toast("地圖尚未就緒"); return; }
-  if (!favMap){
-    favMap = new google.maps.Map($("#favMap"), {
-      center:{lat:23.7,lng:121}, zoom:7,
-      mapTypeControl:false, streetViewControl:false, fullscreenControl:false
-    });
-  }
-  favMarkers.forEach(m=>m.setMap(null)); favMarkers=[];
+  if (!SearchEngine.ready || !SearchEngine.map){ toast("地圖尚未就緒"); return; }
+  const map = SearchEngine.map;
+  clearMarkers();   // 共用 markers 陣列
   let items = FavStore.all();
   if (favFilter!=="all") items=items.filter(i=>i.category===favFilter);
-  const icons={want:"#E2603B",been:"#3F8A5C",pocket:"#5B6B7C"};
+  const icons={want:"#E2603B",been:"#3F8A5C",pocket:"#D6477E"};
   const bounds=new google.maps.LatLngBounds();
-  setTimeout(()=>google.maps.event.trigger(favMap,"resize"), 60);
+  setTimeout(()=>google.maps.event.trigger(map,"resize"), 60);
   items.forEach(it=>{
     if (it.lat==null) return;
     const pos={lat:it.lat,lng:it.lng};
     const m=new google.maps.Marker({
-      map:favMap, position:pos, title:it.name,
+      map, position:pos, title:it.name,
       icon:{path:google.maps.SymbolPath.CIRCLE,scale:8,
         fillColor:icons[it.category]||"#E2603B",fillOpacity:1,strokeColor:"#fff",strokeWeight:2}
     });
     const info=new google.maps.InfoWindow({content:`<strong>${esc(it.name)}</strong><br>${PILL[it.category][1]}`});
-    m.addListener("click", ()=>info.open(favMap,m));
-    favMarkers.push(m); bounds.extend(pos);
+    m.addListener("click", ()=>info.open(map,m));
+    markers.push(m); bounds.extend(pos);
   });
-  if (favMarkers.length){ favMap.fitBounds(bounds); if(favMarkers.length===1) setTimeout(()=>favMap.setZoom(16),80); }
+  if (markers.length){ map.fitBounds(bounds); if(markers.length===1) setTimeout(()=>map.setZoom(16),80); }
+  else { map.setCenter({lat:23.7,lng:121}); map.setZoom(7); }
 }
 
-const PILL = {want:["want","⭐ 想去"], been:["been","✅ 去過"], pocket:["pocket","📌 口袋名單"]};
+const PILL = {want:["want","⭐ 想去"], been:["been","✅ 去過"], pocket:["pocket","❤️ 加入收藏"]};
 function renderFavList(){
   const wrap=$("#favList");
   let items = FavStore.all().sort((a,b)=>b.updatedAt-a.updatedAt);
   if (favFilter!=="all") items=items.filter(i=>i.category===favFilter);
   if (!items.length){
-    wrap.innerHTML='<div class="empty">這個分類還沒有收藏。<br>到「搜尋」標記想去、去過或口袋名單吧。</div>';
+    wrap.innerHTML='<div class="empty">這個分類還沒有收藏。<br>到「搜尋」標記想去、去過或加入收藏吧。</div>';
     return;
   }
   wrap.innerHTML="";
@@ -1386,7 +1429,7 @@ function renderFavList(){
         <div class="fav-row" style="padding:12px 0 0">
           <button data-c="want"  class="${it.category==='want'?'set-want':''}">⭐ 想去</button>
           <button data-c="been"  class="${it.category==='been'?'set-been':''}">✅ 去過</button>
-          <button data-c="pocket"class="${it.category==='pocket'?'set-pocket':''}">📌 口袋</button>
+          <button data-c="pocket"class="${it.category==='pocket'?'set-pocket':''}">❤️ 收藏</button>
           <button data-c="del" style="flex:.6;color:var(--accent-d)">🗑 刪除</button>
         </div>
       </div>`;
