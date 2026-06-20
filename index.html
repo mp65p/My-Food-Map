@@ -1144,8 +1144,6 @@ function setBar(text){ const b=$("#resultCount"); if(b) b.textContent=text; }
 function doNearby(){
   if (!SearchEngine.ready){ toast("地圖尚未就緒，請先設定 API Key"); return; }
   if (!navigator.geolocation){ toast("此瀏覽器不支援定位"); return; }
-  // 附近搜尋會用到地圖標位，自動展開地圖
-  if (!$("#mapcol").classList.contains("shown")) $("#mapToggle").click();
   const btn=$("#searchBtn"); btn.disabled=true; btn.textContent="定位中…";
   setBar("定位中…"); setStatus("正在取得你的位置…");
   navigator.geolocation.getCurrentPosition(async pos=>{
