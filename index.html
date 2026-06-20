@@ -960,6 +960,17 @@ $("#areaInput").addEventListener("input", e=>{ state.area=e.target.value.trim();
 let appMode = "search";       // search | nearby | fav
 let lastFilterMode = "search";// 上一個「搜尋/我的附近」模式
 let searchMapMode = false;    // 搜尋/附近頁：false=清單, true=地圖
+let resultsByMode = {search:null, nearby:null};  // 各模式保留上次結果，切換不消失
+
+// 讓隱藏中的地圖切出來時可靠重繪（多觸發幾次 resize，避免灰白）
+function revealMapResize(){
+  const map=SearchEngine.map; if(!map) return;
+  [60,250,600].forEach(t=>setTimeout(()=>{
+    google.maps.event.trigger(map,"resize");
+    if (markers.length) fitMarkers(); else map.setCenter({lat:23.7,lng:121});
+  }, t));
+}
+
 function switchView(view){
   appMode = view;
   const isFav = view==="fav";
@@ -976,10 +987,16 @@ function switchView(view){
     $("#grpRegion").style.display  = isNear ? "none":"block";
     $("#grpDistance").style.display= isNear ? "block":"none";
     $("#searchBtn").textContent = isNear ? "📍 搜尋我附近" : "🔍 搜尋美食";
-    // 只有「搜尋↔我的附近」互切才清空；從收藏返回保留清單，不用重搜
+    // 切換「搜尋↔我的附近」時，顯示該模式上次的結果（保留，不用重搜）
     if (view !== lastFilterMode){
-      $("#listcol").innerHTML="";
-      setBar(isNear ? "按「搜尋我附近」找周邊" : "設定條件後按「搜尋美食」");
+      clearMarkers();
+      const saved = resultsByMode[view];
+      if (saved && saved.length){
+        lastResults=[]; renderResults(saved, false);   // 重繪並重新綁定、重新標記
+      } else {
+        $("#listcol").innerHTML="";
+        setBar(isNear ? "按「搜尋我附近」找周邊" : "設定條件後按「搜尋美食」");
+      }
     }
     lastFilterMode = view;
   }
@@ -1021,12 +1038,7 @@ $("#mapToggle").addEventListener("click", function(){
   if (searchMapMode){
     mc.classList.add("shown");
     $("#listcol").style.display="none";   // 切換：隱藏清單、只看地圖
-    if (SearchEngine.map){
-      setTimeout(()=>{
-        google.maps.event.trigger(SearchEngine.map, "resize");
-        if (markers.length) fitMarkers(); else SearchEngine.map.setCenter({lat:23.7,lng:121});
-      }, 60);
-    }
+    revealMapResize();
   } else {
     mc.classList.remove("shown");
     $("#listcol").style.display="";       // 切回清單
@@ -1219,6 +1231,7 @@ function renderResults(list, append){
     addMarker(p);
     refreshFavButtons(card, p.place_id);
   });
+  if (appMode==="search"||appMode==="nearby") resultsByMode[appMode] = lastResults.slice();
   if ($("#mapcol").classList.contains("shown")) fitMarkers();
 }
 
@@ -1388,7 +1401,10 @@ function plotFavMap(){
   if (favFilter!=="all") items=items.filter(i=>i.category===favFilter);
   const icons={want:"#E2603B",been:"#3F8A5C",pocket:"#D6477E"};
   const bounds=new google.maps.LatLngBounds();
-  setTimeout(()=>google.maps.event.trigger(map,"resize"), 60);
+  [60,250,600].forEach(t=>setTimeout(()=>{
+    google.maps.event.trigger(map,"resize");
+    if (markers.length){ map.fitBounds(bounds); if(markers.length===1) map.setZoom(16); }
+  }, t));
   items.forEach(it=>{
     if (it.lat==null) return;
     const pos={lat:it.lat,lng:it.lng};
