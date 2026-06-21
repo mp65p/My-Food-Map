@@ -48,17 +48,28 @@
   /* ---------- App shell ---------- */
   #app{display:none;flex-direction:column;height:100%}
   header.top{
-    display:flex;align-items:center;gap:10px;padding:11px 16px;
+    display:block;padding:11px 16px;
     background:var(--panel);border-bottom:1px solid var(--line);position:sticky;top:0;z-index:20;
   }
+  .top-row1{display:flex;align-items:center;gap:10px}
   header.top .brand{font-weight:700;font-size:17px;display:flex;align-items:center;gap:7px}
   header.top .brand span{font-size:20px}
-  header.top nav{margin-left:auto;display:flex;gap:6px}
-  header.top nav button{
-    border:1px solid var(--line);background:#fff;border-radius:999px;padding:7px 14px;
+  .top-row1 .util{margin-left:auto;display:flex;align-items:center;gap:8px}
+  #navCalendar{
+    font-size:19px;line-height:1;text-decoration:none;border:1px solid var(--line);
+    background:#fff;border-radius:999px;padding:6px 11px;
+  }
+  #navCalendar:active{background:#FFF3E8}
+  #navLogout{
+    border:1px solid var(--line);background:#fff;border-radius:999px;padding:7px 13px;
+    font-size:13.5px;color:var(--accent-d);
+  }
+  nav.tabs{display:flex;gap:6px;margin-top:10px}
+  nav.tabs button{
+    flex:1;border:1px solid var(--line);background:#fff;border-radius:999px;padding:8px 10px;
     font-size:13.5px;color:var(--sub);
   }
-  header.top nav button.active{background:var(--accent);border-color:var(--accent);color:#fff}
+  nav.tabs button.active{background:var(--accent);border-color:var(--accent);color:#fff}
 
   main{flex:1;min-height:0;display:flex;flex-direction:column}
 
@@ -249,12 +260,17 @@
 <!-- ============ APP ============ -->
 <div id="app">
   <header class="top">
-    <div class="brand"><span>🍜</span>食光地圖</div>
-    <nav>
+    <div class="top-row1">
+      <div class="brand"><span>🍜</span>食光地圖</div>
+      <div class="util">
+        <a id="navCalendar" href="https://mp65p.github.io/My-Schedule/" target="_blank" rel="noopener" title="開啟行事曆">📅</a>
+        <button id="navLogout">登出</button>
+      </div>
+    </div>
+    <nav class="tabs">
       <button id="navSearch" class="active">搜尋</button>
       <button id="navNearby">我的附近</button>
       <button id="navFav">我的收藏</button>
-      <button id="navLogout" style="color:var(--accent-d)">登出</button>
     </nav>
   </header>
 
@@ -613,7 +629,7 @@ const SearchEngine = {
     return new Promise((resolve, reject)=>{
       if (!this.ready || !this.service){ reject("MAPS_NOT_READY"); return; }
       let done = false;
-      const timer = setTimeout(()=>{ if(!done){ done=true; reject("TIMEOUT"); } }, 9000);
+      const timer = setTimeout(()=>{ if(!done){ done=true; reject("TIMEOUT"); } }, 13000);
       const req = {
         location: center,
         radius: radius || 1500
@@ -628,14 +644,27 @@ const SearchEngine = {
       if (state.openNow) req.openNow = true;
       const sp = this.priceSpan(state.prices);
       if (sp){ req.minPrice = sp.min; req.maxPrice = sp.max; }
-      this.service.nearbySearch(req, (results, status)=>{
-        if (done) return; done=true; clearTimeout(timer);
+      const collected = [];
+      const handle = (results, status, pagination)=>{
+        if (done) return;
         const OK = google.maps.places.PlacesServiceStatus.OK;
         const ZERO = google.maps.places.PlacesServiceStatus.ZERO_RESULTS;
-        if (status === OK && results) resolve(this.applyClientFilters(results, state));
-        else if (status === ZERO) resolve([]);
-        else reject(status);
-      });
+        if (status === OK && results){
+          this.applyClientFilters(results, state).forEach(r=>collected.push(r));
+          // 還有下一頁、且未達 40 → 再抓一頁（Google 需稍等令牌生效）
+          if (pagination && pagination.hasNextPage && collected.length < 40){
+            setTimeout(()=>{ if(!done) pagination.nextPage(); }, 1800);
+          } else {
+            done=true; clearTimeout(timer); resolve(collected);
+          }
+        } else if (status === ZERO){
+          done=true; clearTimeout(timer); resolve(collected);
+        } else {
+          done=true; clearTimeout(timer);
+          collected.length ? resolve(collected) : reject(status);
+        }
+      };
+      this.service.nearbySearch(req, handle);
     });
   },
 
@@ -766,7 +795,7 @@ let myLocMarker = null;
 let lastResults = [];
 let resultBuffer = [];      // 已抓回的全部結果（含尚未顯示的）
 let shownCount = 0;         // 目前已顯示幾筆
-const FIRST_SHOW = 30;      // 首次顯示目標筆數
+const FIRST_SHOW = 40;      // 首次顯示目標筆數
 const MORE_STEP = 20;       // 「載入更多」每次再顯示
 function sleep(ms){ return new Promise(r=>setTimeout(r, ms)); }
 
